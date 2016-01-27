@@ -20,7 +20,7 @@ function menu_based_pathing_help($route_name, RouteMatchInterface $route_match) 
 	case 'help.page.menu_based_pathing':
 	  $output = '';
 	  $output .= '<h3>' . t('About') . '</h3>';
-	  $output .= '<p>' . t('Generate paths for entities based on their menu position. Use a placeholder pattern that just uses node id to avoid errors on save. This also fixes changes to menu location made at the same time as alias generation.') . '</p>';
+	  $output .= '<p>' . t('Generate paths for entities based on their menu position because pathauto, at time of writing, requires you to save once to update the menu placement then again to generate the url off the new location. Use a placeholder pattern that just uses node id to avoid errors on first save.') . '</p>';
 	  return $output;
 
 	default:
