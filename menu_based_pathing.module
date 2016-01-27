@@ -1,0 +1,112 @@
+<?php
+
+/**
+* @file
+* Contains menu_based_pathing.module.
+*/
+
+use Drupal\Core\Entity\ContentEntityInterface;
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Entity\EntityTypeInterface;
+use Drupal\Core\Field\BaseFieldDefinition;
+use Drupal\Core\Routing\RouteMatchInterface;
+
+/**
+* Implements hook_help().
+*/
+function menu_based_pathing_help($route_name, RouteMatchInterface $route_match) {
+	switch ($route_name) {
+	// Main module help for the menu_based_pathing module.
+	case 'help.page.menu_based_pathing':
+	  $output = '';
+	  $output .= '<h3>' . t('About') . '</h3>';
+	  $output .= '<p>' . t('Generate paths for entities based on their menu position. Use a placeholder pattern that just uses node id to avoid errors on save. This also fixes changes to menu location made at the same time as alias generation.') . '</p>';
+	  return $output;
+
+	default:
+	}
+}
+
+/**
+ * Implements hook_entity_presave().
+ */
+function menu_based_pathing_entity_presave($entity) {
+    if (!($entity instanceof ContentEntityInterface) || !$entity->hasField('path')) {
+        return;
+    }
+}
+
+/**
+ * Implements hook_pathauto_alias_alter().
+ */
+function menu_based_pathing_pathauto_alias_alter(&$alias, $context) {
+
+		//what's the menulink they just submitted?
+		$menu_link_title = $_POST['menu']['title'];
+		$menu_link_parent = $_POST['menu']['menu_parent'];
+
+		$menu_link_parent = explode(":", $menu_link_parent);
+
+		$menu_name = $menu_link_parent[0];
+
+		$parentsArr = array();
+		$parentsArr[$menu_link_title] = $menu_link_parent[1].":".$menu_link_parent[2];
+
+		$fullMenu = menu_based_pathing_buildMenu($menu_name,$parentsArr);
+		//we're going to find the parent because we're ignoring our current location in the menu
+		$path = menu_based_pathing_buildPath($fullMenu[0]['#items'],$menu_link_parent[1].":".$menu_link_parent[2]);
+		$path .= '/'.$menu_link_title;
+        $alias = $path;
+}
+
+function menu_based_pathing_getAllContentLinksFromMenu($menuObj,$links){
+
+	foreach($menuObj as $k => $v){
+		if (substr($k,0,17) == "menu_link_content"){
+			$links[$v['title']] = $k;
+			if (!empty($v['below'])){
+				$links = array_merge($links,menu_based_pathing_getAllContentLinksFromMenu($v['below'],$links));
+			}
+		}
+	}
+
+	return $links;
+}
+
+function menu_based_pathing_buildMenu($menu_name, $links){
+	  $menu_tree = \Drupal::menuTree();
+
+	  // Build the typical default set of menu tree parameters.
+	  $parameters = $menu_tree->getCurrentRouteMenuTreeParameters($menu_name);
+	  $parameters->addExpandedParents(array_values($links));
+
+	  $tree = $menu_tree->load($menu_name, $parameters);
+	  $menu = $menu_tree->build($tree);
+
+	  $newLinks = menu_based_pathing_getAllContentLinksFromMenu($menu['#items'],$links);
+
+	 if (count($newLinks) > count($links)){
+		 return menu_based_pathing_buildMenu($menu_name, $newLinks);
+	 }else{
+		 return Array($menu,$newLinks);
+	 }
+}
+
+function menu_based_pathing_buildPath($fullMenu,$target,$path=''){
+
+	//we're recursively gonna build our url string here
+	foreach($fullMenu as $k => $v) {
+		if ($k == $target) {
+			//found you!
+			return $path.'/'.urlencode(str_replace(" ","-",$v['title']));
+		} elseif (!empty($v['below'])) {
+			$findPath = menu_based_pathing_buildPath($v['below'], $target, $path . '/' . urlencode(str_replace(" ","-",$v['title'])));
+			if (empty($findPath)) {
+				continue;
+			}else{
+				return $findPath;
+			}
+		}
+	}
+
+}
